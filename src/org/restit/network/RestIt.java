@@ -21,11 +21,6 @@ import javax.net.ssl.X509TrustManager;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.HttpClient;
-import org.apache.http.conn.params.ConnManagerParams;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.params.HttpConnectionParams;
-import org.apache.http.params.HttpParams;
 import org.json.JSONObject;
 import org.restit.model.ServerError;
 import org.restit.model.serialization.ServerErrorDeserializer;
@@ -44,84 +39,24 @@ public class RestIt {
 	//Logging tag
 	private static final String LOG_TAG = "RestIt";
 	private static final String SLASH_CHAR = "/";
-	private static final String CHARSET = "UTF-8";
+
 	
+	protected static RestItClient client;
 	
-	protected boolean allowInsecureConnection = false;
-	protected SSLContext insecureSSLContext;
-	protected String baseUrl;
-	protected String contentType = ContentType.FORM;
-	
-	protected static RestIt instance;
-	
-	
-	
-	 /** Timeout (in ms) we specify for each http request */
-    public int HTTP_REQUEST_TIMEOUT_MS = 30 * 1000;
 	
 	protected RestIt()
 	{
 		//by default, register the error class
 		RestItMapper.addClass("error", ServerError.class, new ServerErrorSerializer(), new ServerErrorDeserializer());
 	}
-	
-	/**
-     * Configures the httpClient to connect to the URL provided.
-     */
-    protected HttpClient getHttpClient() {
-        HttpClient httpClient = new DefaultHttpClient();
-        final HttpParams params = httpClient.getParams();
-        HttpConnectionParams.setConnectionTimeout(params, HTTP_REQUEST_TIMEOUT_MS);
-        HttpConnectionParams.setSoTimeout(params, HTTP_REQUEST_TIMEOUT_MS);
-        ConnManagerParams.setTimeout(params, HTTP_REQUEST_TIMEOUT_MS);
-        return httpClient;
-    }
-    
-    /**
-     * Configure the connection with the default settings
-     * @param url The URL to connect to
-     * @return HttpURLConnection
-     */
-    protected HttpURLConnection getConnection(URL url) throws IOException
-    {
-    	return getConnection(url, RequestMethod.GET);
-    }
-    
-    /**
-     * Configure the connection with the default settings
-     * @param url The URL to connect to
-     * @param requestMethod The request method to use
-     * @return HttpURLConnection
-     */
-    protected HttpURLConnection getConnection(URL url, String requestMethod) throws IOException
-    {
-    	if(url == null)
-    		return null;
-    	
-		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-		connection.setConnectTimeout(getInstance().HTTP_REQUEST_TIMEOUT_MS);
-        connection.setRequestMethod(requestMethod);
-        connection.setRequestProperty("Charset", CHARSET);
-        connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("Content-Type", getInstance().getContentType()+";charset=" + CHARSET);
-        connection.setRequestProperty("Accept", ContentType.JSON +", " + ContentType.TEXT + ", " + ContentType.XML);
-        
-        //see if we need to allow insecure connections
-        if(isAllowInsecureConnections())
-        {
-        	HttpsURLConnection secureConnection = (HttpsURLConnection)connection;
-        	secureConnection.setSSLSocketFactory(getInsecureSSlContext().getSocketFactory());
-        }
-        
-        return connection;
-    }
+ 
     
     /**
      * Get the complete URL for a request
      * @param path The path to REST service
      * @return Complete URL with base URL and given path
      */
-    protected String getUrlWithPath(String path)
+    protected static String getUrlWithPath(String path)
     {
     	if(path != null && path.length() > 0)
 		{
@@ -133,72 +68,22 @@ public class RestIt {
 			}
 		}
     	
-    	return getBaseUrl() + path;
+    	return getClient().getBaseUrl() + path;
     }
     
-    /**
-     * Get the set content type
-     * @return
-     */
-    protected String getContentType()
-    {
-    	return contentType;
-    }
-    
-    /**
-     * Get the base url
-     * @return
-     */
-    protected String getBaseUrl()
-    {
-    	return baseUrl;
-    }
-    
-    /**
-     * Will this client allow connections to insecure servers
-     * @return
-     */
-    protected boolean isAllowInsecureConnections()
-    {
-    	return this.allowInsecureConnection;
-    }
-    
-    /**
-     * Get the fake CA that we built
-     * @return
-     */
-    protected SSLContext getInsecureSSlContext()
-    {
-    	return this.insecureSSLContext;
-    }
-    
-    /**
-     * Allow or disallow insecure connections
-     * @param value
-     */
-    protected void setAllowInsecureConnections(boolean value)
-    {
-    	this.allowInsecureConnection = value;
-    }
-    
-    ///////////////////////////////
-    //
-    // Static methods
-    //
-    ////////////////////////////////
 	
 	/**
 	 * Create the shared RestIt manager
 	 * @return
 	 */
-	private static RestIt getInstance()
+	private static RestItClient getClient()
 	{
-		if(instance == null)
+		if(client == null)
 		{
-			instance = new RestIt();
+			client = new RestItClient();
 		}
 		
-		return instance;
+		return client;
 	}
 	
 	
@@ -210,7 +95,7 @@ public class RestIt {
 	 */
 	public static void setAllowInsecureConnections(boolean value, InputStream certificateStream)
 	{
-		getInstance().setAllowInsecureConnections(value);
+		getClient().setAllowInsecureConnection(value);
 		
         CertificateFactory cf;
 		try {
@@ -243,7 +128,7 @@ public class RestIt {
 			HttpsURLConnection.setDefaultHostnameVerifier(new NullHostNameVerifier());
 		
 			//store the context
-			getInstance().insecureSSLContext = context;
+			getClient().setInsecureSSLContext( context );
 		
 		} catch (Exception e) {
 			
@@ -267,7 +152,7 @@ public class RestIt {
 			}
 		}
 		
-		getInstance().baseUrl = url;
+		getClient().setBaseUrl( url );
 	}
 	
 	/**
@@ -276,7 +161,7 @@ public class RestIt {
 	 */
 	public static void setContentType(String type)
 	{
-		getInstance().contentType = type;
+		getClient().setDefaultContentType( type );
 	}
 	
 	/**
@@ -285,7 +170,7 @@ public class RestIt {
 	 */
 	public static void setTimeout(int time)
 	{
-		getInstance().HTTP_REQUEST_TIMEOUT_MS = time * 1000;
+		getClient().setHttpRequestTimeout( time * 1000 );
 	}
 	
 	/**
@@ -306,6 +191,19 @@ public class RestIt {
 	}
 	
 	/**
+	 * Set a header value that will be included on every request. Useful for headers like authentication tokens or cookies
+	 * @param header The header name
+	 * @param value Value of the header
+	 */
+	public static void setDefaultHeader(String header, String value)
+	{
+		if(header == null || value == null)
+			return;
+		
+		getClient().setDefaultHeader(header, value);
+	}
+	
+	/**
 	 * Make a GET request to the given path
 	 * @param path The path to the REST service, not the full URL
  	 * @param callback The code that will be executed upon completion by the server
@@ -315,13 +213,13 @@ public class RestIt {
 	{
 		
 		//make sure that base URL has been set
-		if(getInstance().getBaseUrl() == null)
+		if(getClient().getBaseUrl() == null)
 		{
 			Log.e(LOG_TAG, "Could not make GET request because a base URL has not been set. Please use RestIt.setBaseUrl().");
 			return null;
 		}
 
-		String fullUrlValue = getInstance().getUrlWithPath(path);
+		String fullUrlValue = getUrlWithPath(path);
 		
 		HttpURLConnection connection = null;
 		
@@ -332,7 +230,7 @@ public class RestIt {
 			URL fullUrl = new URL(fullUrlValue);
 			
 			//make server call
-			connection = getInstance().getConnection(fullUrl);
+			connection = getClient().getConnection(fullUrl);
 
 			String result = processConnection(connection);
 			
@@ -384,7 +282,7 @@ public class RestIt {
 		{
 			//convert json object to bytes
 			try {
-				bytes = jsonObject.toString().getBytes(CHARSET);
+				bytes = jsonObject.toString().getBytes(RestItClient.CHARSET);
 			} catch (UnsupportedEncodingException e) {
 				//log error but continue
 				Log.e(LOG_TAG, e.getLocalizedMessage(), e);
@@ -406,13 +304,13 @@ public class RestIt {
 	{
 		
 		//make sure that base URL has been set
-		if(getInstance().getBaseUrl() == null)
+		if(getClient().getBaseUrl() == null)
 		{
 			Log.e(LOG_TAG, "Could not make GET request because a base URL has not been set. Please use RestIt.setBaseUrl().");
 			return null;
 		}
 
-		String fullUrlValue = getInstance().getUrlWithPath(path);
+		String fullUrlValue = getUrlWithPath(path);
 		
 		HttpURLConnection connection = null;
 		
@@ -423,7 +321,7 @@ public class RestIt {
 			URL fullUrl = new URL(fullUrlValue);
 			
 			//make server call
-			connection = getInstance().getConnection(fullUrl, RequestMethod.POST);
+			connection = getClient().getConnection(fullUrl, RequestMethod.POST);
 			
 			if(postObjectBytes != null)
 			{
@@ -513,7 +411,7 @@ public class RestIt {
 			String cookies = connection.getHeaderField("Set-Cookie");
 			
 			//create new connection
-			HttpURLConnection newConnection = getInstance().getConnection(new URL(newUrl));
+			HttpURLConnection newConnection = getClient().getConnection(new URL(newUrl));
 			newConnection.setRequestProperty("Cookie", cookies);
 			newConnection.setRequestMethod(connection.getRequestMethod());
 			
@@ -527,8 +425,7 @@ public class RestIt {
 		
 		//We don't have a 200 OK response but see if we have a readable error
 		
-		//parse
-		String responseMessage = connection.getRequestMethod();
+		//parse error stream
 		InputStream istream = new BufferedInputStream(connection.getErrorStream());
         String result = NetworkUtil.parseStream(istream);
 		
