@@ -51,5 +51,14 @@ public abstract class ServerAsyncTask<Params, Progress, Result> extends AsyncTas
 	 * Called when a proper error message is thrown from the server
 	 */
 	protected abstract void onServerError(ServerError error);
+	
+	/**
+	 * Get the server error if one exists
+	 * @return
+	 */
+	protected ServerError getServerError()
+	{
+		return this.serverError;
+	}
 
 }

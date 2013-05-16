@@ -10,6 +10,11 @@ import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 
+import org.restit.model.ServerError;
+import org.restit.model.serialization.ServerErrorDeserializer;
+import org.restit.model.serialization.ServerErrorSerializer;
+import org.restit.objectmapping.RestItMapper;
+
 public class RestItClient {
 
 	protected static final String CHARSET = "UTF-8";
@@ -26,7 +31,8 @@ public class RestItClient {
 	
 	protected RestItClient()
 	{
-		
+		//by default, register the error class
+		RestItMapper.addClass("error", ServerError.class, new ServerErrorSerializer(), new ServerErrorDeserializer());
 	}
 
 	/**

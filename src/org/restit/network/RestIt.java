@@ -23,8 +23,6 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
 import org.json.JSONObject;
 import org.restit.model.ServerError;
-import org.restit.model.serialization.ServerErrorDeserializer;
-import org.restit.model.serialization.ServerErrorSerializer;
 import org.restit.network.insecure.NullHostNameVerifier;
 import org.restit.network.insecure.NullX509TrustManager;
 import org.restit.objectmapping.RestItMapper;
@@ -42,13 +40,6 @@ public class RestIt {
 
 	
 	protected static RestItClient client;
-	
-	
-	protected RestIt()
-	{
-		//by default, register the error class
-		RestItMapper.addClass("error", ServerError.class, new ServerErrorSerializer(), new ServerErrorDeserializer());
-	}
  
     
     /**
@@ -385,6 +376,8 @@ public class RestIt {
             //parse
             String result = NetworkUtil.parseStream(istream);
             
+            Log.d(LOG_TAG, "Received response: " + result);
+            
             //close connection
             istream.close();
             
@@ -394,7 +387,7 @@ public class RestIt {
 		} else if(status == HttpURLConnection.HTTP_NOT_FOUND )
 		{
 			//404, URL not found
-			String errorMessage = "The requested URL does not exist";
+			String errorMessage = "The requested URL '"+connection.getURL().toString()+"' does not exist";
 			Log.e(LOG_TAG, errorMessage);
 			
 			ServerError error = new ServerError(errorMessage);
@@ -429,6 +422,9 @@ public class RestIt {
 		InputStream istream = new BufferedInputStream(connection.getErrorStream());
         String result = NetworkUtil.parseStream(istream);
 		
+        //log
+        Log.d(LOG_TAG, "Received possible error response: " + result);
+        
 		if(result != null)
 		{
 			Object error = RestItMapper.toPojo(result);
