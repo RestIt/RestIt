@@ -21,8 +21,13 @@ import javax.net.ssl.X509TrustManager;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.entity.mime.content.ByteArrayBody;
+import org.apache.http.entity.mime.content.ContentBody;
 import org.json.JSONObject;
 import org.restit.model.ServerError;
+import org.restit.network.CustomMultiPartEntity.ProgressListener;
 import org.restit.network.insecure.NullHostNameVerifier;
 import org.restit.network.insecure.NullX509TrustManager;
 import org.restit.objectmapping.RestItMapper;
@@ -297,7 +302,7 @@ public class RestIt {
 		//make sure that base URL has been set
 		if(getClient().getBaseUrl() == null)
 		{
-			Log.e(LOG_TAG, "Could not make GET request because a base URL has not been set. Please use RestIt.setBaseUrl().");
+			Log.e(LOG_TAG, "Could not make POST request because a base URL has not been set. Please use RestIt.setBaseUrl().");
 			return null;
 		}
 
@@ -307,7 +312,7 @@ public class RestIt {
 		
 		try {
 			
-			Log.d(LOG_TAG, "Starting GET request to: " +fullUrlValue);
+			Log.d(LOG_TAG, "Starting POST request to: " +fullUrlValue);
 			
 			URL fullUrl = new URL(fullUrlValue);
 			
@@ -356,6 +361,103 @@ public class RestIt {
 		
 		return null;
 		
+	}
+	
+	/**
+	 * Make POST request to given path using a multipart form
+	 * @param path Url path not including server name
+	 * @param postObjectBytes The byte array of the object to post
+	 * @param formElementName The name of element in the HTML form
+	 * @param fileName The file name of the file
+	 * @return
+	 * @throws ServerErrorException
+	 */
+	public static Object multipartPostObject(String path, byte[] postObjectBytes, String formElementName, String fileName, ProgressListener progressListener) throws ServerErrorException
+	{
+		//make sure that base URL has been set
+		if(getClient().getBaseUrl() == null)
+		{
+			Log.e(LOG_TAG, "Could not make multipart POST request because a base URL has not been set. Please use RestIt.setBaseUrl().");
+			return null;
+		}
+
+		String fullUrlValue = getUrlWithPath(path);
+		
+		HttpURLConnection connection = null;
+		
+		try {
+			
+			Log.d(LOG_TAG, "Starting multipart POST request to: " +fullUrlValue);
+			
+			URL fullUrl = new URL(fullUrlValue);
+			
+			//make server call
+			connection = getClient().getConnection(fullUrl, RequestMethod.POST);
+			connection.setUseCaches(false);
+			connection.setDoInput(true);
+			connection.setDoOutput(true);
+			
+			//create multipart entity
+			ContentBody contentPart = new ByteArrayBody(postObjectBytes, fileName);
+			MultipartEntity reqEntity = null;
+			
+			if(progressListener != null)
+			{
+				//create custom multipart entity so that we can keep the application informed of progress
+				reqEntity = new CustomMultiPartEntity(HttpMultipartMode.BROWSER_COMPATIBLE, progressListener);
+			} else
+			{
+				//normal multipart request
+				reqEntity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE);
+			}
+			 
+		    reqEntity.addPart(formElementName, contentPart);
+			
+			connection.setRequestProperty("Connection", "Keep-Alive");
+			connection.addRequestProperty("Content-length", reqEntity.getContentLength()+"");
+			connection.setRequestProperty(reqEntity.getContentType().getName(), reqEntity.getContentType().getValue());
+			
+			if(postObjectBytes != null)
+			{
+				//attach post objects
+				OutputStream outputStream = new BufferedOutputStream(connection.getOutputStream());
+				reqEntity.writeTo(outputStream);
+				outputStream.flush();
+				outputStream.close();
+			}
+
+			//get response from server
+			String result = processConnection(connection);
+			
+			//convert to POJO
+			Object pojo = RestItMapper.toPojo(result);
+			
+			if(pojo != null)
+			{
+				//found pojo
+				return pojo;
+			} else
+			{
+				//return raw response
+				return result;
+			}
+			
+		} catch (ClientProtocolException e) {
+			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			
+			
+		} catch (IOException e) {
+			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			
+		} finally
+		{
+			if(connection != null)
+			{
+				connection.disconnect();
+			}
+		}
+		
+		return null;
 	}
 	
 	/**
