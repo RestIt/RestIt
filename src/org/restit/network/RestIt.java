@@ -133,6 +133,16 @@ public class RestIt {
 	}
 	
 	/**
+	 * Get the base url that has been set for the RestIt framework
+	 * @return
+	 */
+	public static String getBaseUrl()
+	{
+		return getClient().getBaseUrl();
+	}
+	
+	
+	/**
 	 * Set the base URL
 	 * @param url The base 
 	 */
@@ -231,16 +241,8 @@ public class RestIt {
 			String result = processConnection(connection);
 			
 			//convert to POJO
-			Object pojo = RestItMapper.toPojo(result);
-			if(pojo != null)
-			{
-				//found pojo
-				return pojo;
-			} else
-			{
-				//return raw response
-				return result;
-			}
+			Object response = RestItMapper.parseResponse(result);
+			return response;
 			
 			
 		} catch (ClientProtocolException e) {
@@ -332,17 +334,8 @@ public class RestIt {
 			String result = processConnection(connection);
 			
 			//convert to POJO
-			Object pojo = RestItMapper.toPojo(result);
-			
-			if(pojo != null)
-			{
-				//found pojo
-				return pojo;
-			} else
-			{
-				//return raw response
-				return result;
-			}
+			Object response = RestItMapper.parseResponse(result);
+			return response;
 			
 		} catch (ClientProtocolException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
@@ -430,17 +423,8 @@ public class RestIt {
 			String result = processConnection(connection);
 			
 			//convert to POJO
-			Object pojo = RestItMapper.toPojo(result);
-			
-			if(pojo != null)
-			{
-				//found pojo
-				return pojo;
-			} else
-			{
-				//return raw response
-				return result;
-			}
+			Object response = RestItMapper.parseResponse(result);
+			return response;
 			
 		} catch (ClientProtocolException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
@@ -529,7 +513,7 @@ public class RestIt {
         
 		if(result != null)
 		{
-			Object error = RestItMapper.toPojo(result);
+			Object error = RestItMapper.parseResponse(result);
 			if(error instanceof ServerError)
 			{
 				((ServerError) error).setServerCode(status);

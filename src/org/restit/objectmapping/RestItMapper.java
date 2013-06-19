@@ -70,79 +70,130 @@ public class RestItMapper {
 	}
 	
 	/**
+	 * Parse the response from the server. Map it to a POJO if possible. Otherwise return the raw string;
+	 * @param responseString Server response in JSON string format
+	 * @return
+	 */
+	public static Object parseResponse(String responseString)
+	{
+		if(responseString == null)
+			return null;
+		
+		try 
+		{	
+			//first create JSON object
+			JSONObject parentObject = new JSONObject(responseString);
+			
+			//first see if there is a matching key to map the POJO to
+			String key = getResponseObjectKey(parentObject);
+			if(key == null)
+			{
+				//no key was found that matches the registered POJO, return original response
+				return responseString;
+			} else
+			{
+				//key was found and registered, convert response to POJO
+				return toPojo(key, parentObject);
+			}
+		
+		} catch (JSONException e) {
+			Log.e(LOG_TAG, e.getMessage(), e);
+			
+			return null;
+		}
+	}
+	
+	/**
+	 * Look at the first part of the JSON response and see if the parent object key matches a 
+	 * register RestItkey
+	 * @param parentObject Server response in JSON format
+	 * @return String of parent key in JSON object
+	 */
+	protected static String getResponseObjectKey(JSONObject parentObject) throws JSONException
+	{
+		if(parentObject != null && parentObject.length() > 0)
+		{
+			//get the first key to see if it matches a known class
+			String key = (String)parentObject.names().get(0);
+			if(key != null && getClassMaps().containsKey(key))
+			{
+				return key;
+			} else
+			{
+				Log.d(LOG_TAG, "No class is registered for response key '"+ key +"'");
+			}
+		}
+		
+		//key not found
+		return null;
+	}
+	
+	/**
 	 * Convert a json string to a registered Pojo Object
 	 * @param jsonString
 	 * @return
 	 */
-	public static Object toPojo(String jsonString)
+	protected static Object toPojo(String key, JSONObject parentObject) throws JSONException
 	{
-		if(jsonString == null)
+		if(key == null || parentObject == null)
 			return null;
 		
-		try 
-		{
 			Object convertedObject = null;
-			
-			//first create JSON object
-			JSONObject parentObject = new JSONObject(jsonString);
+
 			if(parentObject.length() > 0)
 			{
-				//get the first key to see if it matches a known class
-				String key = (String)parentObject.names().get(0);
-				if(key != null && getClassMaps().containsKey(key))
-				{
-					//the key that we have found matches a known class
-					ClassRegistration classRegistration = getClassMaps().get(key);
-					Object childObject = parentObject.get(key);
-					if(classRegistration != null && classRegistration.getClass() != null && childObject != null)
-					{	
+				//the key that we have found matches a known class
+				ClassRegistration classRegistration = getClassMaps().get(key);
+				Object childObject = parentObject.get(key);
+				if(classRegistration != null && classRegistration.getClass() != null && childObject != null)
+				{	
+					
+					String json = null;
+		
+					if(childObject instanceof JSONArray)
+					{
+						json = childObject.toString();
 						
-						String json = null;
-			
-						if(childObject instanceof JSONArray)
+						//loop through JSON Array and parse each object
+						List<Object> results = new ArrayList<Object>();
+						JSONArray array = (JSONArray) childObject;
+						for(int i = 0; i < array.length(); i++)
 						{
-							json = childObject.toString();
-							
-							//loop through JSON Array and parse each object
-							List<Object> results = new ArrayList<Object>();
-							JSONArray array = (JSONArray) childObject;
-							for(int i = 0; i < array.length(); i++)
-							{
-								JSONObject jsonObject = (JSONObject)array.get(i);
-								Object value = toPojo(jsonObject.toString(), classRegistration.getClazz(), classRegistration.getJsonDeserializer());
-								results.add(value);
-							}
-							
-							return results;
-						}
-						else if(childObject instanceof JSONObject)
-						{
-							json = childObject.toString();
-						} else
-						{
-							//if we are dealing with a json object use that. If we ended up with a key value pair, use the parent Object
-							json = parentObject.toString();
+							JSONObject jsonObject = (JSONObject)array.get(i);
+							Object value = toPojo(jsonObject.toString(), classRegistration.getClazz(), classRegistration.getJsonDeserializer());
+							results.add(value);
 						}
 						
-
-						convertedObject = toPojo(json, classRegistration.getClazz(), classRegistration.getJsonDeserializer());
+						return results;
+					}
+					else if(childObject instanceof JSONObject)
+					{
+						JSONObject jsonObject = (JSONObject)childObject;
+						
+						if(jsonObject.length() == 0)
+						{
+							//no keys have been defined, return null
+							return null;
+						}
+						
+						json = jsonObject.toString();
+					} else
+					{
+						//if we are dealing with a json object use that. If we ended up with a key value pair, use the parent Object
+						json = parentObject.toString();
 					}
 					
-				} else
-				{
-					Log.w(LOG_TAG, "No class is registered for response key '"+ key +"'");
+
+					convertedObject = toPojo(json, classRegistration.getClazz(), classRegistration.getJsonDeserializer());
 				}
+					
 			}
 			
 			
 			
 			
 			return convertedObject;
-		} catch (JSONException e) {
-			Log.e(LOG_TAG, e.getMessage(), e);
-			
-			return null;
-		}
+		
 	}
 	
 	/**
