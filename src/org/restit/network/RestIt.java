@@ -2,6 +2,8 @@ package org.restit.network;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,13 +23,8 @@ import javax.net.ssl.X509TrustManager;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
-import org.apache.http.entity.mime.HttpMultipartMode;
-import org.apache.http.entity.mime.MultipartEntity;
-import org.apache.http.entity.mime.content.ByteArrayBody;
-import org.apache.http.entity.mime.content.ContentBody;
 import org.json.JSONObject;
 import org.restit.model.ServerError;
-import org.restit.network.CustomMultiPartEntity.ProgressListener;
 import org.restit.network.insecure.NullHostNameVerifier;
 import org.restit.network.insecure.NullX509TrustManager;
 import org.restit.objectmapping.RestItMapper;
@@ -386,35 +383,50 @@ public class RestIt {
 			
 			//make server call
 			connection = getClient().getConnection(fullUrl, RequestMethod.POST);
+			connection.setConnectTimeout(60000); //60 seconds to complete an upload 
 			connection.setUseCaches(false);
 			connection.setDoInput(true);
 			connection.setDoOutput(true);
-			
-			//create multipart entity
-			ContentBody contentPart = new ByteArrayBody(postObjectBytes, fileName);
-			MultipartEntity reqEntity = null;
-			
-			if(progressListener != null)
-			{
-				//create custom multipart entity so that we can keep the application informed of progress
-				reqEntity = new CustomMultiPartEntity(HttpMultipartMode.BROWSER_COMPATIBLE, progressListener);
-			} else
-			{
-				//normal multipart request
-				reqEntity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE);
-			}
-			 
-		    reqEntity.addPart(formElementName, contentPart);
-			
+
+
+		    connection.setChunkedStreamingMode(2048);
+		    String boundry = "z6fQbdm2TTgLwPQj9u1HjAM25z9AJuGSx7WG9dnD";
+		    		
 			connection.setRequestProperty("Connection", "Keep-Alive");
-			connection.addRequestProperty("Content-length", reqEntity.getContentLength()+"");
-			connection.setRequestProperty(reqEntity.getContentType().getName(), reqEntity.getContentType().getValue());
+			connection.setRequestProperty("Cache-Control", "no-cache");
+			connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundry);
 			
 			if(postObjectBytes != null)
 			{
 				//attach post objects
-				OutputStream outputStream = new BufferedOutputStream(connection.getOutputStream());
-				reqEntity.writeTo(outputStream);
+				DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
+				
+			    //build the request body
+				outputStream.writeBytes("--" + boundry + "\r\n" + "Content-Disposition: form-data; name=\"" + formElementName + "\";filename=\"" + fileName + "\"\r\n\r\n");
+    
+
+			    //object upload content size
+			    long totalUploadSize = postObjectBytes.length;
+			    
+				//we have to manually process the stream in order to correctly update the progress listener
+				byte[] buffer = new byte[2048];
+		        long totalBytes = 0;
+		        int bytesRead = 0;
+		        
+		        InputStream inputStream = new ByteArrayInputStream(postObjectBytes);
+		        
+		        while ((bytesRead = inputStream.read(buffer)) > -1) {
+		            totalBytes += bytesRead;
+		            outputStream.write(buffer, 0, bytesRead);
+		            
+		            if(progressListener != null){
+		            	progressListener.transferred(totalBytes, totalUploadSize);
+		            }
+		        }
+		        
+		        outputStream.writeBytes("\r\n--" + boundry + "--\r\n");
+				
+				
 				outputStream.flush();
 				outputStream.close();
 			}
