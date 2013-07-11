@@ -464,6 +464,15 @@ public class RestIt {
 	 */
 	protected static String processConnection(HttpURLConnection connection) throws IOException, ServerErrorException
 	{
+		if (!isServerAvailable(connection)) {
+			
+			String errorMessage = "The server could not be reached because of a connection problem.  Please check your Network or WiFi connection.";
+//					"The server at '" + getBaseUrl() + "' could not be reached.  Check your Network or WiFi connection.";
+			Log.e(LOG_TAG, errorMessage);
+						
+			throw new ServerErrorException(errorMessage);
+		}
+		
 		int status = ((HttpURLConnection) connection).getResponseCode();
 		
 		//figure out the response
@@ -534,6 +543,21 @@ public class RestIt {
 		}
 		
 		return null;
+	}
+	
+	protected static boolean isServerAvailable(HttpURLConnection connection)
+	{
+		try {
+			connection.getResponseCode();
+		}
+		catch (IOException e) {
+			
+			e.printStackTrace();
+			
+			return false;
+		}
+		
+		return true;
 	}
 	
 }
