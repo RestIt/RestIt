@@ -1,5 +1,6 @@
 package org.restit.network;
 
+import org.restit.model.NetworkNotAvailableError;
 import org.restit.model.ServerError;
 
 import android.os.AsyncTask;
@@ -36,6 +37,9 @@ public abstract class ServerAsyncTask<Params, Progress, Result> extends AsyncTas
 		if(this.serverError != null)
 		{
 			onServerError(this.serverError);
+			// dont run the 
+			if (this.serverError instanceof NetworkNotAvailableError)
+				return;
 		}
 		
 	};

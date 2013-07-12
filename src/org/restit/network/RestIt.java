@@ -27,6 +27,7 @@ import javax.net.ssl.X509TrustManager;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
 import org.json.JSONObject;
+import org.restit.model.NetworkNotAvailableError;
 import org.restit.model.ServerError;
 import org.restit.network.insecure.NullHostNameVerifier;
 import org.restit.network.insecure.NullX509TrustManager;
@@ -182,23 +183,6 @@ public class RestIt {
 	}
 	
 	/**
-	 * Is the network currently available
-	 * @return
-	 */
-//	public static boolean isNetworkAvailable(Context mContent)
-//	{
-//		ConnectivityManager connectivityManager = (ConnectivityManager) mContent.getSystemService(Context.CONNECTIVITY_SERVICE);
-//	    NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-//
-//	    if (networkInfo != null && networkInfo.isConnected()) {
-//	        return true;
-//	    } else
-//	    {
-//	    	return false;
-//	    }
-//	}
-	
-	/**
 	 * Set a header value that will be included on every request. Useful for headers like authentication tokens or cookies
 	 * @param header The header name
 	 * @param value Value of the header
@@ -219,58 +203,64 @@ public class RestIt {
 	 */
 	public static Object get(String path) throws ServerErrorException
 	{
-		
-		//make sure that base URL has been set
-		if(getClient().getBaseUrl() == null)
-		{
-			Log.e(LOG_TAG, "Could not make GET request because a base URL has not been set. Please use RestIt.setBaseUrl().");
-			return null;
+		if (!isNetworkConnected()) {
+			sendNetworkStatusUpdate(RestItNetworkStatus.DISCONNECTED);
+		}
+		else {
+			sendNetworkStatusUpdate(RestItNetworkStatus.CONNECTED);
+
+			// make sure that base URL has been set
+			if (getClient().getBaseUrl() == null) {
+				Log.e(LOG_TAG,
+						"Could not make GET request because a base URL has not been set. Please use RestIt.setBaseUrl().");
+				return null;
+			}
+
+			String fullUrlValue = getUrlWithPath(path);
+
+			HttpURLConnection connection = null;
+
+			try {
+
+				Log.d(LOG_TAG, "Starting GET request to: " + fullUrlValue);
+
+				URL fullUrl = new URL(fullUrlValue);
+
+				// make server call
+				connection = getClient().getConnection(fullUrl);
+
+				String result = processConnection(connection);
+
+				// convert to POJO
+				Object response = RestItMapper.parseResponse(result);
+				return response;
+
+			}
+			catch (ClientProtocolException e) {
+				Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+
+			}
+			catch (IOException e) {
+				Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+
+				// UnknownHostException thrown when there is no service - handled by network listener
+
+				// check for the following exceptions related to server connection errors:
+				// SocketException, ConnectException, SocketTimeoutException
+
+				if (e instanceof SocketTimeoutException || e instanceof SocketException
+						|| e instanceof ConnectException) {
+					sendNetworkStatusDisconnected();
+				}
+
+			}
+			finally {
+				if (connection != null) {
+					connection.disconnect();
+				}
+			}
 		}
 
-		String fullUrlValue = getUrlWithPath(path);
-		
-		HttpURLConnection connection = null;
-		
-		try {
-			
-			Log.d(LOG_TAG, "Starting GET request to: " +fullUrlValue);
-			
-			URL fullUrl = new URL(fullUrlValue);
-			
-			//make server call
-			connection = getClient().getConnection(fullUrl);
-
-			String result = processConnection(connection);
-			
-			//convert to POJO
-			Object response = RestItMapper.parseResponse(result);
-			return response;
-			
-			
-		} catch (ClientProtocolException e) {
-			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
-			
-			
-		} catch (IOException e) {
-			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
-			
-			// UnknownHostException thrown when there is no service - handled by network listener
-			
-			// check for the following exceptions related to server connection errors:
-			// SocketException, ConnectException, SocketTimeoutException
-			
-			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
-				throw new ServerErrorException("Network Timeout Occurred. Please try again.");
-			}
-			
-		} finally
-		{
-			if(connection != null)
-			{
-				connection.disconnect();
-			}
-		}
-		
 		return null;
 		
 	}
@@ -360,7 +350,7 @@ public class RestIt {
 			// SocketException, ConnectException, SocketTimeoutException
 
 			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
-				throw new ServerErrorException("Network Timeout Occurred. Please try again.");
+				sendNetworkStatusDisconnected();
 			}
 			
 		} finally
@@ -472,7 +462,7 @@ public class RestIt {
 			// SocketException, ConnectException, SocketTimeoutException
 
 			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
-				throw new ServerErrorException("Network Timeout Occurred. Please try again.");
+				sendNetworkStatusDisconnected();
 			}
 			
 		} finally
@@ -622,9 +612,10 @@ public class RestIt {
 	
 	/**
 	 * Check for network connection
+	 * @throws NetworkNotAvailableException 
 	 * 
 	 */
-	public static void checkNetworkConnectivity()
+	public static void checkNetworkConnectivity() throws NetworkNotAvailableException
 	{
 		if (!isNetworkConnected()) {
 			sendNetworkStatusUpdate(RestItNetworkStatus.DISCONNECTED);
@@ -638,9 +629,28 @@ public class RestIt {
 	 * Send network status updates for the network connection listener to receive.
 	 * 
 	 * @param status
+	 * @throws NetworkNotAvailableException 
 	 */
-	public static void sendNetworkStatusUpdate(RestItNetworkStatus status) 
+	public static void sendNetworkStatusUpdate(RestItNetworkStatus status) throws NetworkNotAvailableException 
 	{
-		restItNetworkListener.onNetworkStatusChanged(status);
+		if (status.equals(RestItNetworkStatus.CONNECTED)) {
+
+			if (restItNetworkListener != null) {
+				restItNetworkListener.onNetworkStatusChanged(status);
+			}
+		}
+		else {
+			sendNetworkStatusDisconnected();
+		}
+	}
+	
+	public static void sendNetworkStatusDisconnected() throws NetworkNotAvailableException
+	{
+		if (restItNetworkListener != null) {
+			restItNetworkListener.onNetworkStatusChanged(RestItNetworkStatus.DISCONNECTED);
+		}
+		else {
+			throw new NetworkNotAvailableException(NetworkNotAvailableError.class.getName());
+		}
 	}
 }
