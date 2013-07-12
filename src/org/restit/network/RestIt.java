@@ -8,7 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -251,8 +254,14 @@ public class RestIt {
 		} catch (IOException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
 			
-			// TODO check for network timeout
-			// TODO throw new ServerErrorException("Network Timeout Occurred. Please try again.")
+			// UnknownHostException thrown when there is no service - handled by network listener
+			
+			// check for the following exceptions related to server connection errors:
+			// SocketException, ConnectException, SocketTimeoutException
+			
+			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
+				throw new ServerErrorException("Network Timeout Occurred. Please try again.");
+			}
 			
 		} finally
 		{
@@ -345,8 +354,14 @@ public class RestIt {
 			
 		} catch (IOException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
-			// TODO check for network timeout
-			// TODO throw new ServerErrorException("Network Timeout Occurred. Please try again.")
+			// UnknownHostException thrown when there is no service - handled by network listener
+
+			// check for the following exceptions related to server connection errors:
+			// SocketException, ConnectException, SocketTimeoutException
+
+			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
+				throw new ServerErrorException("Network Timeout Occurred. Please try again.");
+			}
 			
 		} finally
 		{
@@ -451,8 +466,14 @@ public class RestIt {
 			
 		} catch (IOException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
-			// TODO check for network timeout
-			// TODO throw new ServerErrorException("Network Timeout Occurred. Please try again.")
+			// UnknownHostException thrown when there is no service - handled by network listener
+
+			// check for the following exceptions related to server connection errors:
+			// SocketException, ConnectException, SocketTimeoutException
+
+			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
+				throw new ServerErrorException("Network Timeout Occurred. Please try again.");
+			}
 			
 		} finally
 		{
@@ -545,6 +566,13 @@ public class RestIt {
 		return null;
 	}
 	
+	/**
+	 * Catches IOExceptions related to network connection. Use checkNetworkConnectivity() and isNetworkConnected()
+	 * instead.
+	 * 
+	 * @param connection
+	 * @return
+	 */
 	protected static boolean isServerAvailable(HttpURLConnection connection)
 	{
 		try {
@@ -560,12 +588,24 @@ public class RestIt {
 		return true;
 	}
 	
+	/**
+	 * Store the network connection listener and connectivity manager for network connection status updates.
+	 * 
+	 * @param connectivityManager
+	 * @param networkListener
+	 */
 	public static void setNetworkConnectionListener(ConnectivityManager connectivityManager, IRestItNetworkListener networkListener)
 	{
 		restItConnectivityManager = connectivityManager;
 		restItNetworkListener = networkListener;
 	}
 	
+	/**
+	 * Check if the android device has a network connection. This does not check for connection issues due to the
+	 * server. Those exceptions are handled in the get, post, and multipartpost methods.
+	 * 
+	 * @return
+	 */
 	public static boolean isNetworkConnected()
 	{
 		if (restItConnectivityManager == null)
@@ -580,6 +620,10 @@ public class RestIt {
 		return false;
 	}
 	
+	/**
+	 * Check for network connection
+	 * 
+	 */
 	public static void checkNetworkConnectivity()
 	{
 		if (!isNetworkConnected()) {
@@ -590,6 +634,11 @@ public class RestIt {
 		}
 	}
 	
+	/**
+	 * Send network status updates for the network connection listener to receive.
+	 * 
+	 * @param status
+	 */
 	public static void sendNetworkStatusUpdate(RestItNetworkStatus status) 
 	{
 		restItNetworkListener.onNetworkStatusChanged(status);
