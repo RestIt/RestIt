@@ -42,6 +42,8 @@ public class RestIt {
 
 	
 	protected static RestItClient client;
+	private static ConnectivityManager restItConnectivityManager;
+	private static IRestItNetworkListener restItNetworkListener;
  
     
     /**
@@ -180,18 +182,18 @@ public class RestIt {
 	 * Is the network currently available
 	 * @return
 	 */
-	public static boolean isNetworkAvailable(Context mContent)
-	{
-		ConnectivityManager connectivityManager = (ConnectivityManager) mContent.getSystemService(Context.CONNECTIVITY_SERVICE);
-	    NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-
-	    if (networkInfo != null && networkInfo.isConnected()) {
-	        return true;
-	    } else
-	    {
-	    	return false;
-	    }
-	}
+//	public static boolean isNetworkAvailable(Context mContent)
+//	{
+//		ConnectivityManager connectivityManager = (ConnectivityManager) mContent.getSystemService(Context.CONNECTIVITY_SERVICE);
+//	    NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+//
+//	    if (networkInfo != null && networkInfo.isConnected()) {
+//	        return true;
+//	    } else
+//	    {
+//	    	return false;
+//	    }
+//	}
 	
 	/**
 	 * Set a header value that will be included on every request. Useful for headers like authentication tokens or cookies
@@ -248,6 +250,9 @@ public class RestIt {
 			
 		} catch (IOException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			
+			// TODO check for network timeout
+			// TODO throw new ServerErrorException("Network Timeout Occurred. Please try again.")
 			
 		} finally
 		{
@@ -340,6 +345,8 @@ public class RestIt {
 			
 		} catch (IOException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			// TODO check for network timeout
+			// TODO throw new ServerErrorException("Network Timeout Occurred. Please try again.")
 			
 		} finally
 		{
@@ -444,6 +451,8 @@ public class RestIt {
 			
 		} catch (IOException e) {
 			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			// TODO check for network timeout
+			// TODO throw new ServerErrorException("Network Timeout Occurred. Please try again.")
 			
 		} finally
 		{
@@ -464,15 +473,6 @@ public class RestIt {
 	 */
 	protected static String processConnection(HttpURLConnection connection) throws IOException, ServerErrorException
 	{
-		if (!isServerAvailable(connection)) {
-			
-			String errorMessage = "The server could not be reached because of a connection problem.  Please check your Network or WiFi connection.";
-//					"The server at '" + getBaseUrl() + "' could not be reached.  Check your Network or WiFi connection.";
-			Log.e(LOG_TAG, errorMessage);
-						
-			throw new ServerErrorException(errorMessage);
-		}
-		
 		int status = ((HttpURLConnection) connection).getResponseCode();
 		
 		//figure out the response
@@ -560,4 +560,38 @@ public class RestIt {
 		return true;
 	}
 	
+	public static void setNetworkConnectionListener(ConnectivityManager connectivityManager, IRestItNetworkListener networkListener)
+	{
+		restItConnectivityManager = connectivityManager;
+		restItNetworkListener = networkListener;
+	}
+	
+	public static boolean isNetworkConnected()
+	{
+		if (restItConnectivityManager == null)
+			return false;
+		
+		NetworkInfo activeConnection = restItConnectivityManager.getActiveNetworkInfo();
+		if ((activeConnection != null)  && activeConnection.isConnected())
+		{
+		  return true;
+		}
+
+		return false;
+	}
+	
+	public static void checkNetworkConnectivity()
+	{
+		if (!isNetworkConnected()) {
+			sendNetworkStatusUpdate(RestItNetworkStatus.DISCONNECTED);
+		}
+		else {
+			sendNetworkStatusUpdate(RestItNetworkStatus.CONNECTED);
+		}
+	}
+	
+	public static void sendNetworkStatusUpdate(RestItNetworkStatus status) 
+	{
+		restItNetworkListener.onNetworkStatusChanged(status);
+	}
 }
