@@ -1,6 +1,5 @@
 package org.restit.network;
 
-import org.restit.model.NetworkNotAvailableError;
 
 /**
  * Error Exception thrown when the network is not available
@@ -8,10 +7,8 @@ import org.restit.model.NetworkNotAvailableError;
  * @author Cody
  *
  */
-public class NetworkNotAvailableException extends ServerErrorException
+public class NetworkNotAvailableException extends Exception
 {
-	private NetworkNotAvailableError error;
-
 	/**
 	 * 
 	 */
@@ -19,24 +16,11 @@ public class NetworkNotAvailableException extends ServerErrorException
 	
 	public NetworkNotAvailableException()
 	{
-		
+		super();
 	}
 	
 	public NetworkNotAvailableException(String message)
 	{
-		this.error = new NetworkNotAvailableError(message);
-	}
-	
-	public NetworkNotAvailableException(NetworkNotAvailableError error)
-	{
-		this.error = error;
-	}
-	
-	public NetworkNotAvailableError getError() {
-		return error;
-	}
-
-	public void setError(NetworkNotAvailableError error) {
-		this.error = error;
+		super(message);
 	}
 }
