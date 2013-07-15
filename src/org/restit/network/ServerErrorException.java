@@ -25,6 +25,11 @@ public class ServerErrorException extends Exception {
 	{
 		this.error = error;
 	}
+	
+	public ServerErrorException(Exception exception)
+	{
+		this.error = new ServerError(exception);
+	}
 
 	public ServerError getError() {
 		return error;
