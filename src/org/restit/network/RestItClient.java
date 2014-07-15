@@ -165,10 +165,10 @@ public class RestItClient {
         connection.setRequestProperty("Charset", CHARSET);
         connection.setInstanceFollowRedirects(true);
         connection.setRequestProperty("Content-Type", getDefaultContentType()+";charset=" + CHARSET);
-        connection.setRequestProperty("Accept", ContentType.JSON +", " + ContentType.TEXT + ", " + ContentType.XML);
+        connection.setRequestProperty("Accept", ContentType.JSON +", " + ContentType.TEXT_HTML + ", " + ContentType.TEXT_PLAIN + ", " + ContentType.XML);
         
         //see if we need to allow insecure connections
-        if(isAllowInsecureConnection())
+        if(isAllowInsecureConnection() && (connection instanceof HttpsURLConnection) )
         {
         	HttpsURLConnection secureConnection = (HttpsURLConnection)connection;
         	secureConnection.setSSLSocketFactory(getInsecureSSLContext().getSocketFactory());

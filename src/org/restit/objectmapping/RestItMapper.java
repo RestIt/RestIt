@@ -76,7 +76,7 @@ public class RestItMapper {
 	 */
 	public static Object parseResponse(String responseString)
 	{
-		if(responseString == null)
+		if(responseString == null || responseString.isEmpty())
 			return null;
 		
 		try 
@@ -97,9 +97,10 @@ public class RestItMapper {
 			}
 		
 		} catch (JSONException e) {
-			Log.e(LOG_TAG, e.getMessage(), e);
+			Log.w(LOG_TAG, e.getMessage(), e);
 			
-			return null;
+			//there was an error reading the JSON, just return the original response string
+			return responseString;
 		}
 	}
 	

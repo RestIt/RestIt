@@ -18,6 +18,8 @@ import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Iterator;
+import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -55,6 +57,18 @@ public class RestIt {
      */
     protected static String getUrlWithPath(String path)
     {
+	
+    	return getUrlWithPath(getClient().getBaseUrl(),path);
+    }
+    
+    /**
+     * Get the complete URL for a request
+     * @param baseUrl The base url of the request
+     * @param path The path to REST service
+     * @return Complete URL with base URL and given path
+     */
+    protected static String getUrlWithPath(String baseUrl, String path)
+    {
     	if(path != null && path.length() > 0)
 		{
 			//remove forward slash if it exists. The BASE URL will already have a trailing slash
@@ -65,7 +79,7 @@ public class RestIt {
 			}
 		}
     	
-    	return getClient().getBaseUrl() + path;
+    	return baseUrl + path;
     }
     
 	
@@ -187,10 +201,17 @@ public class RestIt {
 	 */
 	public static void setDefaultHeader(String header, String value)
 	{
-		if(header == null || value == null)
+		if(header == null)
+		{
 			return;
-		
-		getClient().setDefaultHeader(header, value);
+			
+		} else if(value == null)
+		{
+			getClient().getDefaultHeaders().remove(header);
+		} else
+		{
+			getClient().setDefaultHeader(header, value);
+		}
 	}
 	
 	/**
@@ -268,6 +289,72 @@ public class RestIt {
 		
 		return null;
 	}
+	
+	/**
+	 * Make a DELETE request to the given path
+	 * @param path The path to the REST service, not the full URL
+ 	 * @param callback The code that will be executed upon completion by the server
+	 * @throws ServerErrorException 
+	 */
+	public static Object delete(String path) throws ServerErrorException
+	{
+		//make sure that base URL has been set
+		if(getClient().getBaseUrl() == null)
+		{
+			Log.e(LOG_TAG, "Could not make DELETE request because a base URL has not been set. Please use RestIt.setBaseUrl().");
+			return null;
+		}
+
+		String fullUrlValue = getUrlWithPath(path);
+		
+		HttpURLConnection connection = null;
+		
+		try {
+			
+			Log.d(LOG_TAG, "Starting DELETE request to: " +fullUrlValue);
+			
+			URL fullUrl = new URL(fullUrlValue);
+			
+			//make server call
+			connection = getClient().getConnection(fullUrl, RequestMethod.DELETE);
+			
+
+			//get response from server
+			String result = processConnection(connection);
+			
+			//convert to POJO
+			Object response = RestItMapper.parseResponse(result);
+			return response;
+			
+		} catch (ClientProtocolException e) {
+			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			
+			throw new ServerErrorException(e);
+			
+		} catch (IOException e) {
+			Log.e(LOG_TAG, e.getLocalizedMessage(), e);
+			// UnknownHostException thrown when there is no service - handled by network listener
+
+			// check for the following exceptions related to server connection errors:
+			// SocketException, ConnectException, SocketTimeoutException
+
+			if (e instanceof SocketTimeoutException || e instanceof SocketException || e instanceof ConnectException) {
+				//sendNetworkStatusDisconnected();
+			}
+			
+			throw new ServerErrorException(e);
+			
+		} finally
+		{
+			if(connection != null)
+			{
+				connection.disconnect();
+			}
+		}
+
+	}
+	
+
 	
 	/**
 	 * Make a POST request to the given path
@@ -375,10 +462,29 @@ public class RestIt {
 	 * @param postObjectBytes The byte array of the object to post
 	 * @param formElementName The name of element in the HTML form
 	 * @param fileName The file name of the file
+	 * @param additionalParameters A map of additional form field values to add on the request
+	 * @param progressListener A listener that will respond to upload progress
 	 * @return
 	 * @throws ServerErrorException
 	 */
-	public static Object multipartPostObject(String path, byte[] postObjectBytes, String formElementName, String fileName, ProgressListener progressListener) throws ServerErrorException
+	public static Object multipartPostObject(String path, byte[] postObjectBytes, String formElementName, String fileName, Map<String, String> additionalParameters, ProgressListener progressListener) throws ServerErrorException
+	{
+		return multipartPostObject(path, postObjectBytes, formElementName, fileName, additionalParameters, progressListener, null);
+	}
+	
+	/**
+	 * Make POST request to given path using a multipart form
+	 * @param path Url path not including server name
+	 * @param postObjectBytes The byte array of the object to post
+	 * @param formElementName The name of element in the HTML form
+	 * @param fileName The file name of the file
+	 * @param additionalParameters A map of additional form field values to add on the request
+	 * @param progressListener A listener that will respond to upload progress
+	 * @param requestOptions Additional options for the request
+	 * @return
+	 * @throws ServerErrorException
+	 */
+	public static Object multipartPostObject(String path, byte[] postObjectBytes, String formElementName, String fileName, Map<String, String> additionalParameters, ProgressListener progressListener, RequestOptions requestOptions) throws ServerErrorException
 	{
 		//make sure that base URL has been set
 		if(getClient().getBaseUrl() == null)
@@ -388,6 +494,10 @@ public class RestIt {
 		}
 
 		String fullUrlValue = getUrlWithPath(path);
+		if(requestOptions != null && requestOptions.getOverrideBaseUrl() != null)
+		{
+			fullUrlValue = getUrlWithPath(requestOptions.getOverrideBaseUrl(), path);
+		}
 		
 		HttpURLConnection connection = null;
 		
@@ -399,26 +509,51 @@ public class RestIt {
 			
 			//make server call
 			connection = getClient().getConnection(fullUrl, RequestMethod.POST);
+			connection.setReadTimeout(10000);
 			connection.setConnectTimeout(60000); //60 seconds to complete an upload 
 			connection.setUseCaches(false);
 			connection.setDoInput(true);
 			connection.setDoOutput(true);
 
-
-		    connection.setChunkedStreamingMode(2048);
+			//see if we are streaming the upload
+			if(requestOptions == null || requestOptions.isChunckedStreamingMode())
+			{
+				connection.setChunkedStreamingMode(2048);
+			}
+			
 		    String boundry = "z6fQbdm2TTgLwPQj9u1HjAM25z9AJuGSx7WG9dnD";
 		    		
 			connection.setRequestProperty("Connection", "Keep-Alive");
 			connection.setRequestProperty("Cache-Control", "no-cache");
 			connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundry);
 			
-			if(postObjectBytes != null)
+			//attach post objects
+			DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
+			
+			//add form fields
+			if(additionalParameters != null && additionalParameters.keySet().size() > 0)
 			{
-				//attach post objects
-				DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
-				
+				Iterator<String> it = additionalParameters.keySet().iterator();
+				while(it.hasNext())
+				{
+					String fieldName = it.next();
+					if(fieldName != null)
+					{
+						String value = additionalParameters.get(fieldName);
+						if(value != null)
+						{
+							//add form field to upload form
+							outputStream.writeBytes("--" + boundry + "\r\n" + "Content-Disposition: form-data; name=\"" + fieldName + "\"\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n"+value+"\r\n");
+						}
+					}
+				}
+			}
+			
+			//attach file
+			if(postObjectBytes != null)
+			{	
 			    //build the request body
-				outputStream.writeBytes("--" + boundry + "\r\n" + "Content-Disposition: form-data; name=\"" + formElementName + "\";filename=\"" + fileName + "\"\r\n\r\n");
+				outputStream.writeBytes("--" + boundry + "\r\n" + "Content-Disposition: form-data; name=\"" + formElementName + "\"; filename=\"" + fileName + "\"\r\n\r\n");
     
 
 			    //object upload content size
@@ -442,10 +577,10 @@ public class RestIt {
 		        
 		        outputStream.writeBytes("\r\n--" + boundry + "--\r\n");
 				
-				
-				outputStream.flush();
-				outputStream.close();
 			}
+			
+			outputStream.flush();
+			outputStream.close();
 
 			//get response from server
 			String result = processConnection(connection);
